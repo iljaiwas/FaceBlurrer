@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="17150" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="19529" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
     <dependencies>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="17150"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="19529"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
@@ -11,9 +11,10 @@
             </connections>
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
-        <customObject id="-3" userLabel="Application"/>
-        <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModuleProvider="target">
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="FaceBlurrer" customModuleProvider="target">
             <connections>
+                <outlet property="imageView" destination="s8i-KN-Haa" id="XzC-pB-gPj"/>
                 <outlet property="window" destination="QvC-M9-y7g" id="gIp-Ho-8D9"/>
             </connections>
         </customObject>
@@ -688,6 +689,30 @@
             <view key="contentView" id="EiT-Mj-1SZ">
                 <rect key="frame" x="0.0" y="0.0" width="480" height="360"/>
                 <autoresizingMask key="autoresizingMask"/>
+                <subviews>
+                    <button verticalHuggingPriority="750" translatesAutoresizingMaskIntoConstraints="NO" id="PQ6-9y-ihh">
+                        <rect key="frame" x="13" y="313" width="116" height="32"/>
+                        <buttonCell key="cell" type="push" title="Open Video…" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="lfM-qO-EZ5">
+                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="openVideoButtonAction:" target="Voe-Tx-rLC" id="NmD-Sk-5ON"/>
+                        </connections>
+                    </button>
+                    <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="s8i-KN-Haa">
+                        <rect key="frame" x="17" y="17" width="446" height="286"/>
+                        <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" imageFrameStyle="grayBezel" id="X2D-1e-VR5"/>
+                    </imageView>
+                </subviews>
+                <constraints>
+                    <constraint firstItem="PQ6-9y-ihh" firstAttribute="top" secondItem="EiT-Mj-1SZ" secondAttribute="top" constant="20" symbolic="YES" id="D6t-zB-Ecf"/>
+                    <constraint firstAttribute="bottom" secondItem="s8i-KN-Haa" secondAttribute="bottom" constant="20" symbolic="YES" id="FOP-NI-D3z"/>
+                    <constraint firstItem="PQ6-9y-ihh" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="Jon-8g-QoX"/>
+                    <constraint firstAttribute="trailing" secondItem="s8i-KN-Haa" secondAttribute="trailing" constant="20" symbolic="YES" id="Y27-3k-elI"/>
+                    <constraint firstItem="s8i-KN-Haa" firstAttribute="top" secondItem="PQ6-9y-ihh" secondAttribute="bottom" constant="20" symbolic="YES" id="eye-rs-zdt"/>
+                    <constraint firstItem="s8i-KN-Haa" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="mtk-ba-5eZ"/>
+                </constraints>
             </view>
             <point key="canvasLocation" x="200" y="400"/>
         </window>
