@@ -108,9 +108,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         maskContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
         maskContext.setLineWidth (5.0)
 
+        let insetFactor = -0.2
+
         for rect in faceRects {
             maskContext.beginPath()
-            maskContext.addRect(rect)
+            maskContext.addEllipse(in: rect.insetBy(dx: insetFactor * rect.size.width, dy: insetFactor * rect.size.height))
             maskContext.closePath()
             maskContext.drawPath(using: .fill)
         }
