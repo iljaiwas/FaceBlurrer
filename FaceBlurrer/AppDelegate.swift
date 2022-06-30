@@ -73,96 +73,82 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         })
     }
 
-    func detectFacesInImage (_ inImage: CGImage) -> NSImage {
-       let personciImage = CIImage(cgImage: inImage)
+    func blurredImageFromImage (_ inImage: CGImage) -> CIImage? {
+        guard let filter = CIFilter(name: "CIGaussianBlur") else {
+            return nil
+        }
+        let ciImage = CIImage(cgImage: inImage)
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(15.0, forKey: kCIInputRadiusKey)
+        return filter.outputImage
+    }
 
-        let accuracy = [CIDetectorAccuracy: CIDetectorAccuracyHigh]
-        let faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: accuracy)
-        let faces = faceDetector?.features(in: personciImage)
+    func faceRectsForImage (_ inImage: CGImage) -> [CGRect] {
+        let personciImage = CIImage(cgImage: inImage)
 
-//        // For converting the Core Image Coordinates to UIView Coordinates
-//        let ciImageSize = personciImage.extent.size
-//        var transform = CGAffineTransform(scaleX: 1, y: -1)
-//        transform = transform.translatedBy(x: 0, y: -ciImageSize.height)
+        let faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+        let faces = faceDetector?.features(in: personciImage) as! [CIFaceFeature]
+        return faces.map{ face in face.bounds }
+    }
 
-        guard let bitmapContext = CGContext(
+    func maskImage (size: CGSize, faceRects: [CGRect]) -> CGImage? {
+
+        guard let maskContext = CGContext(
             data: nil,                                                        // auto-assign memory for the bitmap
-            width: inImage.width,    // width of the view in pixels
-            height: inImage.height,   // height of the view in pixels
+            width: Int(size.width),    // width of the view in pixels
+            height: Int(size.height),   // height of the view in pixels
             bitsPerComponent: 8,                                                          // 8 bits per colour component
             bytesPerRow: 0,                                                          // auto-calculate bytes per row
             space: CGColorSpaceCreateDeviceRGB(),                              // create a suitable colour space
             bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else {
-                return NSImage ()
+                return nil
             }
 
-        bitmapContext.draw(inImage,
-                           in: NSMakeRect(0, 0,  CGFloat(inImage.width),  CGFloat(inImage.height)))
+        maskContext.setFillColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
+        maskContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
+        maskContext.setLineWidth (5.0)
 
-        bitmapContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
-        bitmapContext.setLineWidth (5.0)
-
-//        let resultImage = NSImage(size: NSMakeSize (CGFloat(inImage.width), CGFloat(inImage.height)))
-//
-//        resultImage.lockFocus()
-//
-//        let sourceImage = NSImage(cgImage: inImage, size: .zero)
-
-
-//        //sourceImage.draw(in: NSMakeRect(0, 0, CGFloat(inImage.width), CGFloat(inImage.height)),
-//                         from: NSMakeRect(0, 0, CGFloat(inImage.width), CGFloat(inImage.height)),
-//                         operation: .sourceOver,
-//                         fraction: 1)
-
-
-
-        for face in faces as! [CIFaceFeature] {
-
-            print("Found bounds are \(face.bounds)")
-
-            // Apply the transform to convert the coordinates
-            //let faceViewBounds = face.bounds.applying(transform)
-
-            //let path = NSBezierPath(rect: face.bounds)
-
-            bitmapContext.beginPath()
-            bitmapContext.addRect(face.bounds)
-            bitmapContext.closePath()
-            bitmapContext.drawPath(using: .stroke)
-            /*
-            // Calculate the actual position and size of the rectangle in the image view
-            let viewSize = NSMakeSize(CGFloat(inImage.width), CGFloat(inImage.height))
-            let scale = min(viewSize.width / ciImageSize.width,
-                            viewSize.height / ciImageSize.height)
-            let offsetX = (viewSize.width - ciImageSize.width * scale) / 2
-            let offsetY = (viewSize.height - ciImageSize.height * scale) / 2
-
-            let scaleTransformation = CGAffineTransform(scaleX: scale, y: scale)
-            faceViewBounds = faceViewBounds.applying(scaleTransformation)
-            faceViewBounds.origin.x += offsetX
-            faceViewBounds.origin.y += offsetY
-
-            let faceBox = UIView(frame: faceViewBounds)
-
-            faceBox.layer.borderWidth = 3
-            faceBox.layer.borderColor = UIColor.redColor().CGColor
-            faceBox.backgroundColor = UIColor.clearColor()
-            personPic.addSubview(faceBox)
-             */
-
-            if face.hasLeftEyePosition {
-                print("Left eye bounds are \(face.leftEyePosition)")
-            }
-
-            if face.hasRightEyePosition {
-                print("Right eye bounds are \(face.rightEyePosition)")
-            }
-        }
-        guard let cgImage = bitmapContext.makeImage () else {
-            return NSImage()
+        for rect in faceRects {
+            maskContext.beginPath()
+            maskContext.addRect(rect)
+            maskContext.closePath()
+            maskContext.drawPath(using: .fill)
         }
 
-        return NSImage (cgImage: cgImage, size: NSMakeSize(CGFloat(cgImage.width), CGFloat(cgImage.height)))
+        guard let maskCGImage = maskContext.makeImage() else {
+            return nil
+        }
+
+        return maskCGImage;
+        //return CIImage(cgImage: maskCGImage).applyingFilter("CIMaskToAlpha", parameters: [:]).cgImage
+
     }
+
+    func detectFacesInImage (_ inImage: CGImage) -> NSImage {
+
+        guard let blurredImage = blurredImageFromImage(inImage) else {
+            return NSImage ()
+        }
+        let faceRects = faceRectsForImage(inImage)
+        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), faceRects: faceRects)
+
+        guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
+            return NSImage ()
+        }
+
+        filter.setValue( CIImage(cgImage: inImage), forKey: kCIInputBackgroundImageKey)
+        filter.setValue( blurredImage, forKey: kCIInputImageKey)
+        filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey) 
+
+        guard let outputImage = filter.outputImage else {
+            return NSImage ()
+        }
+        let rep: NSCIImageRep = NSCIImageRep(ciImage: outputImage)
+        let nsImage: NSImage = NSImage(size: rep.size)
+        nsImage.addRepresentation(rep)
+
+        return nsImage
+    }
+
 }
 
