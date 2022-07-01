@@ -84,7 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         })
     }
 
-    func blurredImageFromImage (_ inImage: CGImage) -> CIImage? {
+    func blurredImageFromImage (_ inImage: CIImage) -> CIImage? {
 
         var resultImage : CIImage?
 
@@ -92,8 +92,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let filter = CIFilter(name: "CIGaussianBlur") else {
                 return
             }
-            let ciImage = CIImage(cgImage: inImage)
-            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(inImage, forKey: kCIInputImageKey)
             filter.setValue(15.0, forKey: kCIInputRadiusKey)
             resultImage = filter.outputImage
         }
@@ -108,21 +107,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return faces.map{ face in face.bounds }
     }
 
-    func faceRectsForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
+    func faceRectsForImageWithVision(_ inImage: CIImage) async throws -> [CGRect] {
 
         return try await withCheckedThrowingContinuation { continuation in
 
-            let ciiImage = CIImage(cgImage: inImage)
-            let handler=VNImageRequestHandler(ciImage: ciiImage)
+            let handler=VNImageRequestHandler(ciImage: inImage)
             do{
                 let request = VNDetectFaceRectanglesRequest {aRequest, error in
                     autoreleasepool{
                         var foundFaceRects = [CGRect]()
 
                         if let results=aRequest.results as? [VNFaceObservation]{
-                            print(results.count, "faces found")
+                            //print(results.count, "faces found")
                             for face_obs in results{
-                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.extent.width), y: CGFloat(inImage.extent.height))
                                 let converted_rect=face_obs.boundingBox.applying(ts)
                                 foundFaceRects.append(converted_rect)
                             }
@@ -138,21 +136,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func humanRectsForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
+    func humanRectsForImageWithVision(_ inImage: CIImage) async throws -> [CGRect] {
 
         return try await withCheckedThrowingContinuation { continuation in
 
-            let ciiImage = CIImage(cgImage: inImage)
-            let handler=VNImageRequestHandler(ciImage: ciiImage)
+            let handler=VNImageRequestHandler(ciImage: inImage)
             do{
                 let request = VNDetectHumanRectanglesRequest {aRequest, error in
                     autoreleasepool{
                         var foundFaceRects = [CGRect]()
 
                         if let results=aRequest.results as? [VNHumanObservation]{
-                            print(results.count, "humans found")
+                            //print(results.count, "humans found")
                             for face_obs in results{
-                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.extent.width), y: CGFloat(inImage.extent.height))
                                 let converted_rect=face_obs.boundingBox.applying(ts)
                                 foundFaceRects.append(converted_rect)
                             }
@@ -203,7 +200,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return maskCGImage;
     }
 
-    func detectFacesInImage (_ inImage: CGImage) async -> CIImage? {
+    func detectFacesInImage (_ inImage: CIImage) async -> CIImage? {
 
         guard let blurredImage = blurredImageFromImage(inImage) else {
             return nil
@@ -222,13 +219,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var result : CIImage?
 
         autoreleasepool {
-            let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), maskRects: allRects)
+            let maskImage = maskImage(size: CGSize(width: inImage.extent.width, height: inImage.extent.height), maskRects: allRects)
 
             guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
                 return
             }
 
-            filter.setValue( CIImage(cgImage: inImage), forKey: kCIInputBackgroundImageKey)
+            filter.setValue( inImage, forKey: kCIInputBackgroundImageKey)
             filter.setValue( blurredImage, forKey: kCIInputImageKey)
             filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
 
@@ -313,11 +310,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
 
-                var frameCGImage : CGImage?
+                var frameCIImage : CIImage?
                 try autoreleasepool {
-                    frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
+                    let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
+                    frameCIImage = CIImage(cgImage: frameCGImage)
                 }
-                guard let modifiedImage = await self.detectFacesInImage (frameCGImage!) else {
+                guard let modifiedImage = await self.detectFacesInImage (frameCIImage!) else {
                     break;
                 }
                 DispatchQueue.main.sync {
