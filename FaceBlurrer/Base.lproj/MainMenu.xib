@@ -15,6 +15,7 @@
         <customObject id="Voe-Tx-rLC" customClass="AppDelegate" customModule="FaceBlurrer" customModuleProvider="target">
             <connections>
                 <outlet property="imageView" destination="s8i-KN-Haa" id="XzC-pB-gPj"/>
+                <outlet property="progressBar" destination="PLh-WO-g59" id="7rC-Ra-04y"/>
                 <outlet property="window" destination="QvC-M9-y7g" id="gIp-Ho-8D9"/>
             </connections>
         </customObject>
@@ -701,17 +702,23 @@
                         </connections>
                     </button>
                     <imageView horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="s8i-KN-Haa">
-                        <rect key="frame" x="17" y="17" width="446" height="286"/>
+                        <rect key="frame" x="17" y="17" width="446" height="260"/>
                         <imageCell key="cell" refusesFirstResponder="YES" alignment="left" imageScaling="proportionallyDown" imageFrameStyle="grayBezel" id="X2D-1e-VR5"/>
                     </imageView>
+                    <progressIndicator maxValue="100" style="bar" translatesAutoresizingMaskIntoConstraints="NO" id="PLh-WO-g59">
+                        <rect key="frame" x="20" y="281" width="440" height="20"/>
+                    </progressIndicator>
                 </subviews>
                 <constraints>
+                    <constraint firstItem="PLh-WO-g59" firstAttribute="top" secondItem="PQ6-9y-ihh" secondAttribute="bottom" constant="20" symbolic="YES" id="1xP-0d-mXv"/>
                     <constraint firstItem="PQ6-9y-ihh" firstAttribute="top" secondItem="EiT-Mj-1SZ" secondAttribute="top" constant="20" symbolic="YES" id="D6t-zB-Ecf"/>
                     <constraint firstAttribute="bottom" secondItem="s8i-KN-Haa" secondAttribute="bottom" constant="20" symbolic="YES" id="FOP-NI-D3z"/>
                     <constraint firstItem="PQ6-9y-ihh" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="Jon-8g-QoX"/>
+                    <constraint firstItem="s8i-KN-Haa" firstAttribute="top" secondItem="PLh-WO-g59" secondAttribute="bottom" constant="8" symbolic="YES" id="Pad-MR-FmM"/>
                     <constraint firstAttribute="trailing" secondItem="s8i-KN-Haa" secondAttribute="trailing" constant="20" symbolic="YES" id="Y27-3k-elI"/>
-                    <constraint firstItem="s8i-KN-Haa" firstAttribute="top" secondItem="PQ6-9y-ihh" secondAttribute="bottom" constant="20" symbolic="YES" id="eye-rs-zdt"/>
                     <constraint firstItem="s8i-KN-Haa" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="mtk-ba-5eZ"/>
+                    <constraint firstItem="PLh-WO-g59" firstAttribute="leading" secondItem="EiT-Mj-1SZ" secondAttribute="leading" constant="20" symbolic="YES" id="pfp-nv-wfq"/>
+                    <constraint firstAttribute="trailing" secondItem="PLh-WO-g59" secondAttribute="trailing" constant="20" symbolic="YES" id="yDp-yj-uep"/>
                 </constraints>
             </view>
             <point key="canvasLocation" x="200" y="400"/>

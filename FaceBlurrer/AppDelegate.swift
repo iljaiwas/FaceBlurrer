@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBOutlet var window: NSWindow!
     @IBOutlet weak var imageView: NSImageView!
 
+    @IBOutlet weak var progressBar: NSProgressIndicator!
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
@@ -121,6 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     continuation.resume(returning: foundFaceRects)
                 }
+                request.revision = VNDetectFaceLandmarksRequestRevision3
                 try handler.perform([request])
             }catch{
                 print(error)
@@ -224,6 +226,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let outputURL = url.appendingPathExtension("converted.mov")
 
+        try? FileManager.default.removeItem(at: outputURL)
+
         guard let videoTrack = inputAsset.tracks(withMediaType: .video).first else {
             return false
         }
@@ -273,6 +277,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         //let timePerFrame = 1.0 / videoTrack.nominalFrameRate
         let totalFrames = Int (videoDuration.seconds * Double (videoTrack.nominalFrameRate))
+
+        DispatchQueue.main.sync {
+            self.progressBar.maxValue = Double(totalFrames)
+            self.progressBar.doubleValue = 0
+        }
+
         let secondsPerFrame = videoDuration.seconds / Double (totalFrames)
 
         //Step through the frames
@@ -297,6 +307,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         print ("Video file writer status: \(assetwriter.status.rawValue)")
                         abort()
                     }
+                    self.progressBar.doubleValue = Double(counter)
+                    if counter % 100 == 0 {
+                        self.imageView.image = NSImage.fromCIImage(modifiedImage)
+                    }
                 }
 
             } catch (_) {
@@ -310,4 +324,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+}
+
+extension NSImage {
+    /// Generates a CIImage for this NSImage.
+    /// - Returns: A CIImage optional.
+    func ciImage() -> CIImage? {
+        guard let data = self.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: data) else {
+                  return nil
+              }
+        let ci = CIImage(bitmapImageRep: bitmap)
+        return ci
+    }
+
+    /// Generates an NSImage from a CIImage.
+    /// - Parameter ciImage: The CIImage
+    /// - Returns: An NSImage optional.
+    static func fromCIImage(_ ciImage: CIImage) -> NSImage {
+        let rep = NSCIImageRep(ciImage: ciImage)
+        let nsImage = NSImage(size: rep.size)
+        nsImage.addRepresentation(rep)
+        return nsImage
+    }
 }
