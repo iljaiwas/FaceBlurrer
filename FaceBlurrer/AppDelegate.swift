@@ -18,10 +18,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBOutlet var window: NSWindow!
     @IBOutlet weak var imageView: NSImageView!
 
-    var pixelBuffer: CVPixelBuffer?
-    let context = CIContext()
-    var framesGenerated = 0
-    var framesRequested = 0
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
@@ -190,79 +186,74 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let assetWriterSettings = [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey : dimension.width, AVVideoHeightKey: dimension.height] as [String : Any]
 
         let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: assetWriterSettings)
-        let assetWriterAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput, sourcePixelBufferAttributes: nil)
+
+        let adaptorSettings = [ kCVPixelBufferPixelFormatTypeKey : kCVPixelFormatType_32BGRA,
+                                           kCVPixelBufferWidthKey: dimension.width,
+                                          kCVPixelBufferHeightKey: dimension.height ] as [String : Any]
+
+        let assetWriterAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput,
+                                                                      sourcePixelBufferAttributes: nil )//adaptorSettings)
         assetwriter.add(assetWriterInput)
         //begin the session
         assetwriter.startWriting()
         assetwriter.startSession(atSourceTime: CMTime.zero)
-
-        let frameRate = videoTrack.nominalFrameRate
 
         let generator = AVAssetImageGenerator(asset: inputAsset)
 
         generator.requestedTimeToleranceAfter = CMTime.zero
         generator.requestedTimeToleranceBefore = CMTime.zero
 
-        var frameForTimes = [NSValue]()
-        //let totalTimeLength = videoDuration.seconds * Double(videoDuration.timescale)
-        let sampleCounts = Int (videoDuration.seconds * Double(frameRate))
-        let step = videoDuration.seconds  / Double(sampleCounts)
-
-        for i in 0 ..< sampleCounts {
-            let cmTime = CMTimeMake(value: Int64(Double(i) * step), timescale: 1)
-            frameForTimes.append(NSValue(time: cmTime))
-        }
-
         let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
              kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue] as CFDictionary
 
+
+        var temp : CVPixelBuffer?
 
         CVPixelBufferCreate(kCFAllocatorDefault,
                             Int(dimension.width),
                             Int(dimension.height),
                             kCVPixelFormatType_32BGRA,
                             attrs,
-                            &pixelBuffer)
+                            &temp)
+        guard let pixelBuffer = temp else { return false }
 
-        framesGenerated = 0
-        framesRequested = frameForTimes.count
-        generator.generateCGImagesAsynchronously(forTimes: frameForTimes, completionHandler: {requestedTime, image, actualTime, result, error in
+        let context = CIContext()
 
-            self.framesGenerated += 1;
-            print ("framesGenerated: \(self.framesGenerated) of \(self.framesRequested) for time \(actualTime)")
+        //let timePerFrame = 1.0 / videoTrack.nominalFrameRate
+        let totalFrames = Int (videoDuration.seconds * Double (videoTrack.nominalFrameRate))
+        let secondsPerFrame = videoDuration.seconds / Double (totalFrames)
 
-            guard let image = image, let modifiedImage = self.detectFacesInImage (image) else {
-                //close everything
-                print ("generation done")
-                assetWriterInput.markAsFinished()
-                assetwriter.finishWriting {
-                    self.pixelBuffer = nil
+        //Step through the frames
+
+        for counter in 0 ..< totalFrames {
+            let imageTimeEstimate = CMTime(value: CMTimeValue(Double(counter) * secondsPerFrame * 1000), timescale: 1000)
+
+            print ("at \(counter) of \(totalFrames)")
+
+            do {
+                var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
+
+                let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
+                guard let modifiedImage = self.detectFacesInImage (frameCGImage) else {
+                    break;
                 }
-                return
-             }
+                context.render(modifiedImage, to: pixelBuffer)
 
-            self.context.render(modifiedImage, to: self.pixelBuffer!)
-
-            assetWriterAdaptor.append(self.pixelBuffer!, withPresentationTime: actualTime)
-
-            if (self.framesGenerated % 10 == 0) {
-                DispatchQueue.main.async {
-                    let rep = NSCIImageRep(ciImage: modifiedImage)
-                    let nsImage = NSImage(size: rep.size)
-                    nsImage.addRepresentation(rep)
-                    self.imageView.image = nsImage
+                if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
+                    print ("append failed with error \(assetwriter.error!)")
+                    print ("Video file writer status: \(assetwriter.status.rawValue)")
+                    return false
                 }
+
+            } catch (_) {
+                print ("excpetion received")
             }
-            if self.framesGenerated == self.framesRequested {
-                //close everything
-                print ("generation done")
-                assetWriterInput.markAsFinished()
-                assetwriter.finishWriting {
-                    self.pixelBuffer = nil
-                }
-            }
-        })
-        return true;
+        }
+
+        print ("generation done")
+        assetWriterInput.markAsFinished()
+        assetwriter.finishWriting { }
+        return true
     }
 
 }
