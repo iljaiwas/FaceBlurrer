@@ -101,7 +101,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return faces.map{ face in face.bounds }
     }
 
-    func faceRectForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
+    func faceRectsForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
+
+        return try await withCheckedThrowingContinuation { continuation in
+
+            let ciiImage = CIImage(cgImage: inImage)
+            let handler=VNImageRequestHandler(ciImage: ciiImage)
+            do{
+                let request = VNDetectFaceRectanglesRequest {aRequest, error in
+                    var foundFaceRects = [CGRect]()
+
+                    if let results=aRequest.results as? [VNFaceObservation]{
+                        print(results.count, "faces found")
+                        for face_obs in results{
+                            let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                            let converted_rect=face_obs.boundingBox.applying(ts)
+                            foundFaceRects.append(converted_rect)
+                        }
+                    }
+                    continuation.resume(returning: foundFaceRects)
+                }
+                try handler.perform([request])
+            }catch{
+                print(error)
+            }
+        }
+    }
+
+    func humanRectsForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
 
         return try await withCheckedThrowingContinuation { continuation in
 
@@ -114,9 +141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     if let results=aRequest.results as? [VNHumanObservation]{
                         print(results.count, "faces found")
                         for face_obs in results{
-                            //let tf=CGAffineTransform.init(scaleX: 1, y: 1).translatedBy(x: 0, y: CGFloat(-inImage.height))
                             let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
-                            let converted_rect=face_obs.boundingBox.applying(ts) //.applying(tf)
+                            let converted_rect=face_obs.boundingBox.applying(ts)
                             foundFaceRects.append(converted_rect)
                         }
                     }
@@ -130,7 +156,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
 
-    func maskImage (size: CGSize, faceRects: [CGRect]) -> CGImage? {
+    func maskImage (size: CGSize, maskRects: [CGRect]) -> CGImage? {
 
         guard let maskContext = CGContext(
             data: nil,                                                        // auto-assign memory for the bitmap
@@ -149,7 +175,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let insetFactor = -0.2
 
-        for rect in faceRects {
+        for rect in maskRects {
             maskContext.beginPath()
             maskContext.addEllipse(in: rect.insetBy(dx: insetFactor * rect.size.width, dy: insetFactor * rect.size.height))
             maskContext.closePath()
@@ -168,9 +194,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let blurredImage = blurredImageFromImage(inImage) else {
             return nil
         }
-        let faceRects = try? await faceRectForImageWithVision (inImage)
+        var allRects = [CGRect] ()
+        let humanRects = try? await humanRectsForImageWithVision (inImage)
+        let faceRects = try? await faceRectsForImageWithVision (inImage)
 
-        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), faceRects: faceRects ?? [CGRect()])
+        if let humanRects = humanRects {
+            allRects.append(contentsOf: humanRects)
+        }
+        if let faceRects = faceRects {
+            allRects.append(contentsOf: faceRects)
+        }
+
+        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), maskRects: allRects)
 
         guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
             return nil
