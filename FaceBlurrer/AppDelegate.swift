@@ -9,11 +9,19 @@ import Cocoa
 import UniformTypeIdentifiers
 import AVFoundation
 
+
+// https://cifilter.io/CIBlendWithRedMask/
+
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBOutlet var window: NSWindow!
     @IBOutlet weak var imageView: NSImageView!
+
+    var pixelBuffer: CVPixelBuffer?
+    let context = CIContext()
+    var framesGenerated = 0
+    var framesRequested = 0
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
@@ -39,7 +47,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard modalResponse == .OK,
             let url = openPanel.url else { return }
 
-            self.openVideoAtURL (url)
+            self.convertVideo(url: url)
+            //self.openVideoAtURL (url)
         }
     }
 
@@ -51,6 +60,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         generator.requestedTimeToleranceAfter = CMTime.zero
         generator.requestedTimeToleranceBefore = CMTime.zero
+
 
         var frameForTimes = [NSValue]()
         let sampleCounts = 1
@@ -67,7 +77,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if let image = image {
                     print(requestedTime.value, requestedTime.seconds, actualTime.value)
                     let imageWithFace = self.detectFacesInImage (image)
-                    self.imageView.image = imageWithFace
+                    //self.imageView.image = imageWithFace
                 }
             }
         })
@@ -126,31 +136,133 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     }
 
-    func detectFacesInImage (_ inImage: CGImage) -> NSImage {
+    func detectFacesInImage (_ inImage: CGImage) -> CIImage? {
 
         guard let blurredImage = blurredImageFromImage(inImage) else {
-            return NSImage ()
+            return nil
         }
         let faceRects = faceRectsForImage(inImage)
         let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), faceRects: faceRects)
 
         guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
-            return NSImage ()
+            return nil
         }
 
         filter.setValue( CIImage(cgImage: inImage), forKey: kCIInputBackgroundImageKey)
         filter.setValue( blurredImage, forKey: kCIInputImageKey)
-        filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey) 
+        filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
 
-        guard let outputImage = filter.outputImage else {
-            return NSImage ()
+        return filter.outputImage
+
+//        guard let outputImage = filter.outputImage else {
+//            return nil ()
+//        }
+//        let rep: NSCIImageRep = NSCIImageRep(ciImage: outputImage)
+//        let nsImage: NSImage = NSImage(size: rep.size)
+//        nsImage.addRepresentation(rep)
+//
+//        return nsImage
+    }
+
+
+
+    func convertVideo(url: URL) -> Bool {
+        let inputAsset = AVAsset(url:url)
+        let videoDuration = inputAsset.duration
+
+        let outputURL = url.appendingPathExtension("converted.mov")
+
+        guard let videoTrack = inputAsset.tracks(withMediaType: .video).first else {
+            return false
         }
-        let rep: NSCIImageRep = NSCIImageRep(ciImage: outputImage)
-        let nsImage: NSImage = NSImage(size: rep.size)
-        nsImage.addRepresentation(rep)
 
-        return nsImage
+        guard let formatDescription = videoTrack.formatDescriptions.first else {
+            return false
+        }
+
+        let dimension = CMVideoFormatDescriptionGetPresentationDimensions(formatDescription as! CMVideoFormatDescription, usePixelAspectRatio: true, useCleanAperture: true)
+
+
+        guard let assetwriter = try? AVAssetWriter(outputURL: outputURL, fileType: .mov) else {
+            abort()
+        }
+
+        let assetWriterSettings = [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey : dimension.width, AVVideoHeightKey: dimension.height] as [String : Any]
+
+        let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: assetWriterSettings)
+        let assetWriterAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput, sourcePixelBufferAttributes: nil)
+        assetwriter.add(assetWriterInput)
+        //begin the session
+        assetwriter.startWriting()
+        assetwriter.startSession(atSourceTime: CMTime.zero)
+
+        let frameRate = videoTrack.nominalFrameRate
+
+        let generator = AVAssetImageGenerator(asset: inputAsset)
+
+        generator.requestedTimeToleranceAfter = CMTime.zero
+        generator.requestedTimeToleranceBefore = CMTime.zero
+
+        var frameForTimes = [NSValue]()
+        //let totalTimeLength = videoDuration.seconds * Double(videoDuration.timescale)
+        let sampleCounts = Int (videoDuration.seconds * Double(frameRate))
+        let step = videoDuration.seconds  / Double(sampleCounts)
+
+        for i in 0 ..< sampleCounts {
+            let cmTime = CMTimeMake(value: Int64(Double(i) * step), timescale: 1)
+            frameForTimes.append(NSValue(time: cmTime))
+        }
+
+        let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
+             kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue] as CFDictionary
+
+
+        CVPixelBufferCreate(kCFAllocatorDefault,
+                            Int(dimension.width),
+                            Int(dimension.height),
+                            kCVPixelFormatType_32BGRA,
+                            attrs,
+                            &pixelBuffer)
+
+        framesGenerated = 0
+        framesRequested = frameForTimes.count
+        generator.generateCGImagesAsynchronously(forTimes: frameForTimes, completionHandler: {requestedTime, image, actualTime, result, error in
+
+            self.framesGenerated += 1;
+            print ("framesGenerated: \(self.framesGenerated) of \(self.framesRequested) for time \(actualTime)")
+
+            guard let image = image, let modifiedImage = self.detectFacesInImage (image) else {
+                //close everything
+                print ("generation done")
+                assetWriterInput.markAsFinished()
+                assetwriter.finishWriting {
+                    self.pixelBuffer = nil
+                }
+                return
+             }
+
+            self.context.render(modifiedImage, to: self.pixelBuffer!)
+
+            assetWriterAdaptor.append(self.pixelBuffer!, withPresentationTime: actualTime)
+
+            if (self.framesGenerated % 10 == 0) {
+                DispatchQueue.main.async {
+                    let rep = NSCIImageRep(ciImage: modifiedImage)
+                    let nsImage = NSImage(size: rep.size)
+                    nsImage.addRepresentation(rep)
+                    self.imageView.image = nsImage
+                }
+            }
+            if self.framesGenerated == self.framesRequested {
+                //close everything
+                print ("generation done")
+                assetWriterInput.markAsFinished()
+                assetwriter.finishWriting {
+                    self.pixelBuffer = nil
+                }
+            }
+        })
+        return true;
     }
 
 }
-
