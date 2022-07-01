@@ -85,13 +85,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func blurredImageFromImage (_ inImage: CGImage) -> CIImage? {
-        guard let filter = CIFilter(name: "CIGaussianBlur") else {
-            return nil
+
+        var resultImage : CIImage?
+
+        autoreleasepool {
+            guard let filter = CIFilter(name: "CIGaussianBlur") else {
+                return
+            }
+            let ciImage = CIImage(cgImage: inImage)
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(15.0, forKey: kCIInputRadiusKey)
+            resultImage = filter.outputImage
         }
-        let ciImage = CIImage(cgImage: inImage)
-        filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(15.0, forKey: kCIInputRadiusKey)
-        return filter.outputImage
+        return resultImage
     }
 
     func faceRectsForImage (_ inImage: CGImage) -> [CGRect] {
@@ -110,17 +116,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let handler=VNImageRequestHandler(ciImage: ciiImage)
             do{
                 let request = VNDetectFaceRectanglesRequest {aRequest, error in
-                    var foundFaceRects = [CGRect]()
+                    autoreleasepool{
+                        var foundFaceRects = [CGRect]()
 
-                    if let results=aRequest.results as? [VNFaceObservation]{
-                        print(results.count, "faces found")
-                        for face_obs in results{
-                            let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
-                            let converted_rect=face_obs.boundingBox.applying(ts)
-                            foundFaceRects.append(converted_rect)
+                        if let results=aRequest.results as? [VNFaceObservation]{
+                            print(results.count, "faces found")
+                            for face_obs in results{
+                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                                let converted_rect=face_obs.boundingBox.applying(ts)
+                                foundFaceRects.append(converted_rect)
+                            }
                         }
+                        continuation.resume(returning: foundFaceRects)
                     }
-                    continuation.resume(returning: foundFaceRects)
                 }
                 request.revision = VNDetectFaceLandmarksRequestRevision3
                 try handler.perform([request])
@@ -138,17 +146,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let handler=VNImageRequestHandler(ciImage: ciiImage)
             do{
                 let request = VNDetectHumanRectanglesRequest {aRequest, error in
-                    var foundFaceRects = [CGRect]()
+                    autoreleasepool{
+                        var foundFaceRects = [CGRect]()
 
-                    if let results=aRequest.results as? [VNHumanObservation]{
-                        print(results.count, "faces found")
-                        for face_obs in results{
-                            let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
-                            let converted_rect=face_obs.boundingBox.applying(ts)
-                            foundFaceRects.append(converted_rect)
+                        if let results=aRequest.results as? [VNHumanObservation]{
+                            print(results.count, "humans found")
+                            for face_obs in results{
+                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                                let converted_rect=face_obs.boundingBox.applying(ts)
+                                foundFaceRects.append(converted_rect)
+                            }
                         }
+                        continuation.resume(returning: foundFaceRects)
                     }
-                    continuation.resume(returning: foundFaceRects)
                 }
                 try handler.perform([request])
             }catch{
@@ -160,32 +170,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func maskImage (size: CGSize, maskRects: [CGRect]) -> CGImage? {
 
-        guard let maskContext = CGContext(
-            data: nil,                                                        // auto-assign memory for the bitmap
-            width: Int(size.width),    // width of the view in pixels
-            height: Int(size.height),   // height of the view in pixels
-            bitsPerComponent: 8,                                                          // 8 bits per colour component
-            bytesPerRow: 0,                                                          // auto-calculate bytes per row
-            space: CGColorSpaceCreateDeviceRGB(),                              // create a suitable colour space
-            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else {
-                return nil
+        var maskCGImage: CGImage?
+
+        autoreleasepool {
+            guard let maskContext = CGContext(
+                data: nil,                                                        // auto-assign memory for the bitmap
+                width: Int(size.width),    // width of the view in pixels
+                height: Int(size.height),   // height of the view in pixels
+                bitsPerComponent: 8,                                                          // 8 bits per colour component
+                bytesPerRow: 0,                                                          // auto-calculate bytes per row
+                space: CGColorSpaceCreateDeviceRGB(),                              // create a suitable colour space
+                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else {
+                    return
+                }
+
+            maskContext.setFillColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
+            maskContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
+            maskContext.setLineWidth (5.0)
+
+            let insetFactor = -0.2
+
+            for rect in maskRects {
+                maskContext.beginPath()
+                maskContext.addEllipse(in: rect.insetBy(dx: insetFactor * rect.size.width, dy: insetFactor * rect.size.height))
+                maskContext.closePath()
+                maskContext.drawPath(using: .fill)
             }
 
-        maskContext.setFillColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
-        maskContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
-        maskContext.setLineWidth (5.0)
-
-        let insetFactor = -0.2
-
-        for rect in maskRects {
-            maskContext.beginPath()
-            maskContext.addEllipse(in: rect.insetBy(dx: insetFactor * rect.size.width, dy: insetFactor * rect.size.height))
-            maskContext.closePath()
-            maskContext.drawPath(using: .fill)
-        }
-
-        guard let maskCGImage = maskContext.makeImage() else {
-            return nil
+            maskCGImage = maskContext.makeImage()
         }
 
         return maskCGImage;
@@ -207,17 +219,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             allRects.append(contentsOf: faceRects)
         }
 
-        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), maskRects: allRects)
+        var result : CIImage?
 
-        guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
-            return nil
+        autoreleasepool {
+            let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), maskRects: allRects)
+
+            guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
+                return
+            }
+
+            filter.setValue( CIImage(cgImage: inImage), forKey: kCIInputBackgroundImageKey)
+            filter.setValue( blurredImage, forKey: kCIInputImageKey)
+            filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
+
+            result = filter.outputImage
         }
 
-        filter.setValue( CIImage(cgImage: inImage), forKey: kCIInputBackgroundImageKey)
-        filter.setValue( blurredImage, forKey: kCIInputImageKey)
-        filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
-
-        return filter.outputImage
+        return result
     }
 
     func convertVideo(url: URL) async -> Bool {
@@ -295,21 +313,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
 
-                let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
-                guard let modifiedImage = await self.detectFacesInImage (frameCGImage) else {
+                var frameCGImage : CGImage?
+                try autoreleasepool {
+                    frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
+                }
+                guard let modifiedImage = await self.detectFacesInImage (frameCGImage!) else {
                     break;
                 }
                 DispatchQueue.main.sync {
-                    context.render(modifiedImage, to: pixelBuffer)
+                    autoreleasepool {
+                        context.render(modifiedImage, to: pixelBuffer)
 
-                    if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
-                        print ("append failed with error \(assetwriter.error!)")
-                        print ("Video file writer status: \(assetwriter.status.rawValue)")
-                        abort()
-                    }
-                    self.progressBar.doubleValue = Double(counter)
-                    if counter % 100 == 0 {
-                        self.imageView.image = NSImage.fromCIImage(modifiedImage)
+                        if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
+                            print ("append failed with error \(assetwriter.error!)")
+                            print ("Video file writer status: \(assetwriter.status.rawValue)")
+                            abort()
+                        }
+                        self.progressBar.doubleValue = Double(counter)
+                        if counter % 100 == 0 {
+                            self.imageView.image = NSImage.fromCIImage(modifiedImage)
+                        }
                     }
                 }
 
