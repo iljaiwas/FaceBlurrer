@@ -8,6 +8,7 @@
 import Cocoa
 import UniformTypeIdentifiers
 import AVFoundation
+import Vision
 
 
 // https://cifilter.io/CIBlendWithRedMask/
@@ -43,7 +44,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard modalResponse == .OK,
             let url = openPanel.url else { return }
 
-            self.convertVideo(url: url)
+            Task {
+                await self.convertVideo(url: url)
+
+            }
             //self.openVideoAtURL (url)
         }
     }
@@ -72,7 +76,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async {
                 if let image = image {
                     print(requestedTime.value, requestedTime.seconds, actualTime.value)
-                    let imageWithFace = self.detectFacesInImage (image)
+                    //let imageWithFace = self.detectFacesInImage (image)
                     //self.imageView.image = imageWithFace
                 }
             }
@@ -96,6 +100,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let faces = faceDetector?.features(in: personciImage) as! [CIFaceFeature]
         return faces.map{ face in face.bounds }
     }
+
+    func faceRectForImageWithVision(_ inImage: CGImage) async throws -> [CGRect] {
+
+        return try await withCheckedThrowingContinuation { continuation in
+
+            let ciiImage = CIImage(cgImage: inImage)
+            let handler=VNImageRequestHandler(ciImage: ciiImage)
+            do{
+                let request = VNDetectHumanRectanglesRequest {aRequest, error in
+                    var foundFaceRects = [CGRect]()
+
+                    if let results=aRequest.results as? [VNHumanObservation]{
+                        print(results.count, "faces found")
+                        for face_obs in results{
+                            //let tf=CGAffineTransform.init(scaleX: 1, y: 1).translatedBy(x: 0, y: CGFloat(-inImage.height))
+                            let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.width), y: CGFloat(inImage.height))
+                            let converted_rect=face_obs.boundingBox.applying(ts) //.applying(tf)
+                            foundFaceRects.append(converted_rect)
+                        }
+                    }
+                    continuation.resume(returning: foundFaceRects)
+                }
+                try handler.perform([request])
+            }catch{
+                print(error)
+            }
+        }
+    }
+
 
     func maskImage (size: CGSize, faceRects: [CGRect]) -> CGImage? {
 
@@ -128,17 +161,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         return maskCGImage;
-        //return CIImage(cgImage: maskCGImage).applyingFilter("CIMaskToAlpha", parameters: [:]).cgImage
-
     }
 
-    func detectFacesInImage (_ inImage: CGImage) -> CIImage? {
+    func detectFacesInImage (_ inImage: CGImage) async -> CIImage? {
 
         guard let blurredImage = blurredImageFromImage(inImage) else {
             return nil
         }
-        let faceRects = faceRectsForImage(inImage)
-        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), faceRects: faceRects)
+        let faceRects = try? await faceRectForImageWithVision (inImage)
+
+        let maskImage = maskImage(size: CGSize(width: inImage.width, height: inImage.height), faceRects: faceRects ?? [CGRect()])
 
         guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
             return nil
@@ -149,20 +181,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
 
         return filter.outputImage
-
-//        guard let outputImage = filter.outputImage else {
-//            return nil ()
-//        }
-//        let rep: NSCIImageRep = NSCIImageRep(ciImage: outputImage)
-//        let nsImage: NSImage = NSImage(size: rep.size)
-//        nsImage.addRepresentation(rep)
-//
-//        return nsImage
     }
 
-
-
-    func convertVideo(url: URL) -> Bool {
+    func convertVideo(url: URL) async -> Bool {
         let inputAsset = AVAsset(url:url)
         let videoDuration = inputAsset.duration
 
@@ -186,10 +207,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let assetWriterSettings = [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey : dimension.width, AVVideoHeightKey: dimension.height] as [String : Any]
 
         let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: assetWriterSettings)
-
-        let adaptorSettings = [ kCVPixelBufferPixelFormatTypeKey : kCVPixelFormatType_32BGRA,
-                                           kCVPixelBufferWidthKey: dimension.width,
-                                          kCVPixelBufferHeightKey: dimension.height ] as [String : Any]
 
         let assetWriterAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput,
                                                                       sourcePixelBufferAttributes: nil )//adaptorSettings)
@@ -234,15 +251,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
 
                 let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
-                guard let modifiedImage = self.detectFacesInImage (frameCGImage) else {
+                guard let modifiedImage = await self.detectFacesInImage (frameCGImage) else {
                     break;
                 }
-                context.render(modifiedImage, to: pixelBuffer)
+                DispatchQueue.main.sync {
+                    context.render(modifiedImage, to: pixelBuffer)
 
-                if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
-                    print ("append failed with error \(assetwriter.error!)")
-                    print ("Video file writer status: \(assetwriter.status.rawValue)")
-                    return false
+                    if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
+                        print ("append failed with error \(assetwriter.error!)")
+                        print ("Video file writer status: \(assetwriter.status.rawValue)")
+                        abort()
+                    }
                 }
 
             } catch (_) {
