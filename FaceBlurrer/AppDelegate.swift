@@ -318,17 +318,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let modifiedImage = await self.detectFacesInImage (frameCIImage!) else {
                     break;
                 }
-                DispatchQueue.main.sync {
-                    autoreleasepool {
-                        context.render(modifiedImage, to: pixelBuffer)
+                autoreleasepool {
+                    context.render(modifiedImage, to: pixelBuffer)
 
-                        if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
-                            print ("append failed with error \(assetwriter.error!)")
-                            print ("Video file writer status: \(assetwriter.status.rawValue)")
-                            abort()
-                        }
-                        self.progressBar.doubleValue = Double(counter)
-                        if counter % 100 == 0 {
+                    if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
+                        print ("append failed with error \(assetwriter.error!)")
+                        print ("Video file writer status: \(assetwriter.status.rawValue)")
+                        abort()
+                    }
+                    if counter % 25 == 0 {
+                        DispatchQueue.main.async {
+                            self.progressBar.doubleValue = Double(counter)
                             self.imageView.image = NSImage.fromCIImage(modifiedImage)
                         }
                     }
