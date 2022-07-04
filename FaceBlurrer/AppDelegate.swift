@@ -45,43 +45,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard modalResponse == .OK,
             let url = openPanel.url else { return }
 
-            Task {
-                await self.convertVideo(url: url)
-
-            }
-            //self.openVideoAtURL (url)
+            _ = self.convertVideo(url: url)
         }
-    }
-
-    func openVideoAtURL (_ url: URL) {
-        let asset = AVAsset(url:url)
-        let videoDuration = asset.duration
-
-        let generator = AVAssetImageGenerator(asset: asset)
-
-        generator.requestedTimeToleranceAfter = CMTime.zero
-        generator.requestedTimeToleranceBefore = CMTime.zero
-
-
-        var frameForTimes = [NSValue]()
-        let sampleCounts = 1
-        let totalTimeLength = Int(videoDuration.seconds * Double(videoDuration.timescale))
-        let step = totalTimeLength / sampleCounts
-
-        for i in 0 ..< sampleCounts {
-            let cmTime = CMTimeMake(value: Int64(i * step), timescale: Int32(videoDuration.timescale))
-            frameForTimes.append(NSValue(time: cmTime))
-        }
-
-        generator.generateCGImagesAsynchronously(forTimes: frameForTimes, completionHandler: {requestedTime, image, actualTime, result, error in
-            DispatchQueue.main.async {
-                if let image = image {
-                    print(requestedTime.value, requestedTime.seconds, actualTime.value)
-                    //let imageWithFace = self.detectFacesInImage (image)
-                    //self.imageView.image = imageWithFace
-                }
-            }
-        })
     }
 
     func blurredImageFromImage (_ inImage: CIImage) -> CIImage? {
@@ -93,7 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             filter.setValue(inImage, forKey: kCIInputImageKey)
-            filter.setValue(15.0, forKey: kCIInputRadiusKey)
+            filter.setValue(30.0, forKey: kCIInputRadiusKey)
             resultImage = filter.outputImage
         }
         return resultImage
@@ -235,7 +200,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return result
     }
 
-    func convertVideo(url: URL) async -> Bool {
+    func convertVideo(url: URL) -> Bool {
         let inputAsset = AVAsset(url:url)
         let videoDuration = inputAsset.duration
 
@@ -302,50 +267,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         //Step through the frames
 
-        for counter in 0 ..< totalFrames {
-            let imageTimeEstimate = CMTime(value: CMTimeValue(Double(counter) * secondsPerFrame * 1000), timescale: 1000)
+        computeImageForFrame (frameIndex: 0,
+                              totalFrames: totalFrames,
+                              generator:generator,
+                              secondsPerFrame: secondsPerFrame,
+                              pixelBuffer: pixelBuffer,
+                              context: context,
+                              assetWriterAdaptor: assetWriterAdaptor,
+                              assetWriterInput: assetWriterInput,
+                              assetWriter: assetwriter)
 
-            print ("at \(counter) of \(totalFrames)")
-
-            do {
-                var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
-
-                var frameCIImage : CIImage?
-                try autoreleasepool {
-                    let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
-                    frameCIImage = CIImage(cgImage: frameCGImage)
-                }
-                guard let modifiedImage = await self.detectFacesInImage (frameCIImage!) else {
-                    break;
-                }
-                autoreleasepool {
-                    context.render(modifiedImage, to: pixelBuffer)
-
-                    if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
-                        print ("append failed with error \(assetwriter.error!)")
-                        print ("Video file writer status: \(assetwriter.status.rawValue)")
-                        abort()
-                    }
-                    if counter % 25 == 0 {
-                        DispatchQueue.main.async {
-                            self.progressBar.doubleValue = Double(counter)
-                            self.imageView.image = NSImage.fromCIImage(modifiedImage)
-                        }
-                    }
-                }
-
-            } catch (_) {
-                print ("excpetion received")
-            }
-        }
-
-        print ("generation done")
-        assetWriterInput.markAsFinished()
-        assetwriter.finishWriting { }
         return true
     }
 
+
+    func  computeImageForFrame (frameIndex : Int , totalFrames : Int, generator: AVAssetImageGenerator, secondsPerFrame: Double, pixelBuffer: CVPixelBuffer, context: CIContext, assetWriterAdaptor: AVAssetWriterInputPixelBufferAdaptor, assetWriterInput: AVAssetWriterInput, assetWriter: AVAssetWriter) {
+
+        if frameIndex == totalFrames {
+            print ("generation done")
+            assetWriterInput.markAsFinished()
+            assetWriter.finishWriting { }
+            return
+        }
+        let imageTimeEstimate = CMTime(value: CMTimeValue(Double(frameIndex) * secondsPerFrame * 1000), timescale: 1000)
+
+        print ("at \(frameIndex) of \(totalFrames)")
+
+        do {
+            var actualTime = CMTime(value: CMTimeValue(0), timescale: 1000)
+
+            var frameCIImage : CIImage?
+            try autoreleasepool {
+                let frameCGImage = try generator.copyCGImage(at: imageTimeEstimate, actualTime: &actualTime)
+                frameCIImage = CIImage(cgImage: frameCGImage)
+            }
+            let faceBlurrer = FaceBlurrer()
+            faceBlurrer.blurrFaces(frameCIImage!) { modifiedImage in
+                autoreleasepool {
+                    guard let modifiedImage = modifiedImage else {
+                        return
+                    }
+
+                    context.render(modifiedImage, to: pixelBuffer)
+
+                    if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
+                        print ("append failed with error \(assetWriter.error!)")
+                        print ("Video file writer status: \(assetWriter.status.rawValue)")
+                        abort()
+                    }
+                    var nsImage = NSImage()
+                    if frameIndex % 25 == 0 {
+                        nsImage = NSImage.fromCIImage(modifiedImage)
+                    }
+                    DispatchQueue.main.async {
+                        if frameIndex % 25 == 0 {
+                            self.progressBar.doubleValue = Double(frameIndex)
+                            self.imageView.image = nsImage
+                        }
+                        self.computeImageForFrame(frameIndex: frameIndex + 1, totalFrames: totalFrames, generator: generator, secondsPerFrame: secondsPerFrame, pixelBuffer: pixelBuffer, context: context, assetWriterAdaptor: assetWriterAdaptor, assetWriterInput: assetWriterInput, assetWriter: assetWriter)
+                    }
+                }
+            }
+        } catch (_) {
+            print ("excpetion received")
+        }
+    }
 }
+
 
 extension NSImage {
     /// Generates a CIImage for this NSImage.

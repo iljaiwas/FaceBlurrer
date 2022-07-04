@@ -10,6 +10,7 @@
 		4D11DF12286DD6AF0010510B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D11DF11286DD6AF0010510B /* AppDelegate.swift */; };
 		4D11DF14286DD6B00010510B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4D11DF13286DD6B00010510B /* Assets.xcassets */; };
 		4D11DF17286DD6B00010510B /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4D11DF15286DD6B00010510B /* MainMenu.xib */; };
+		4D56FC2428722378009C6183 /* FaceBlurrer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D56FC2328722378009C6183 /* FaceBlurrer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		4D11DF13286DD6B00010510B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4D11DF16286DD6B00010510B /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		4D11DF18286DD6B00010510B /* FaceBlurrer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FaceBlurrer.entitlements; sourceTree = "<group>"; };
+		4D56FC2328722378009C6183 /* FaceBlurrer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceBlurrer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +56,7 @@
 				4D11DF13286DD6B00010510B /* Assets.xcassets */,
 				4D11DF15286DD6B00010510B /* MainMenu.xib */,
 				4D11DF18286DD6B00010510B /* FaceBlurrer.entitlements */,
+				4D56FC2328722378009C6183 /* FaceBlurrer.swift */,
 			);
 			path = FaceBlurrer;
 			sourceTree = "<group>";
@@ -129,6 +132,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D11DF12286DD6AF0010510B /* AppDelegate.swift in Sources */,
+				4D56FC2428722378009C6183 /* FaceBlurrer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
