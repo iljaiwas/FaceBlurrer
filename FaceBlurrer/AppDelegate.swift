@@ -49,157 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func blurredImageFromImage (_ inImage: CIImage) -> CIImage? {
-
-        var resultImage : CIImage?
-
-        autoreleasepool {
-            guard let filter = CIFilter(name: "CIGaussianBlur") else {
-                return
-            }
-            filter.setValue(inImage, forKey: kCIInputImageKey)
-            filter.setValue(30.0, forKey: kCIInputRadiusKey)
-            resultImage = filter.outputImage
-        }
-        return resultImage
-    }
-
-    func faceRectsForImage (_ inImage: CGImage) -> [CGRect] {
-        let personciImage = CIImage(cgImage: inImage)
-
-        let faceDetector = CIDetector(ofType: CIDetectorTypeFace, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
-        let faces = faceDetector?.features(in: personciImage) as! [CIFaceFeature]
-        return faces.map{ face in face.bounds }
-    }
-
-    func faceRectsForImageWithVision(_ inImage: CIImage) async throws -> [CGRect] {
-
-        return try await withCheckedThrowingContinuation { continuation in
-
-            let handler=VNImageRequestHandler(ciImage: inImage)
-            do{
-                let request = VNDetectFaceRectanglesRequest {aRequest, error in
-                    autoreleasepool{
-                        var foundFaceRects = [CGRect]()
-
-                        if let results=aRequest.results as? [VNFaceObservation]{
-                            //print(results.count, "faces found")
-                            for face_obs in results{
-                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.extent.width), y: CGFloat(inImage.extent.height))
-                                let converted_rect=face_obs.boundingBox.applying(ts)
-                                foundFaceRects.append(converted_rect)
-                            }
-                        }
-                        continuation.resume(returning: foundFaceRects)
-                    }
-                }
-                request.revision = VNDetectFaceLandmarksRequestRevision3
-                try handler.perform([request])
-            }catch{
-                print(error)
-            }
-        }
-    }
-
-    func humanRectsForImageWithVision(_ inImage: CIImage) async throws -> [CGRect] {
-
-        return try await withCheckedThrowingContinuation { continuation in
-
-            let handler=VNImageRequestHandler(ciImage: inImage)
-            do{
-                let request = VNDetectHumanRectanglesRequest {aRequest, error in
-                    autoreleasepool{
-                        var foundFaceRects = [CGRect]()
-
-                        if let results=aRequest.results as? [VNHumanObservation]{
-                            //print(results.count, "humans found")
-                            for face_obs in results{
-                                let ts=CGAffineTransform.identity.scaledBy(x: CGFloat(inImage.extent.width), y: CGFloat(inImage.extent.height))
-                                let converted_rect=face_obs.boundingBox.applying(ts)
-                                foundFaceRects.append(converted_rect)
-                            }
-                        }
-                        continuation.resume(returning: foundFaceRects)
-                    }
-                }
-                try handler.perform([request])
-            }catch{
-                print(error)
-            }
-        }
-    }
-
-
-    func maskImage (size: CGSize, maskRects: [CGRect]) -> CGImage? {
-
-        var maskCGImage: CGImage?
-
-        autoreleasepool {
-            guard let maskContext = CGContext(
-                data: nil,                                                        // auto-assign memory for the bitmap
-                width: Int(size.width),    // width of the view in pixels
-                height: Int(size.height),   // height of the view in pixels
-                bitsPerComponent: 8,                                                          // 8 bits per colour component
-                bytesPerRow: 0,                                                          // auto-calculate bytes per row
-                space: CGColorSpaceCreateDeviceRGB(),                              // create a suitable colour space
-                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else {
-                    return
-                }
-
-            maskContext.setFillColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
-            maskContext.setStrokeColor (CGColor (red: 1, green: 0, blue: 0, alpha: 1))
-            maskContext.setLineWidth (5.0)
-
-            let insetFactor = -0.2
-
-            for rect in maskRects {
-                maskContext.beginPath()
-                maskContext.addEllipse(in: rect.insetBy(dx: insetFactor * rect.size.width, dy: insetFactor * rect.size.height))
-                maskContext.closePath()
-                maskContext.drawPath(using: .fill)
-            }
-
-            maskCGImage = maskContext.makeImage()
-        }
-
-        return maskCGImage;
-    }
-
-    func detectFacesInImage (_ inImage: CIImage) async -> CIImage? {
-
-        guard let blurredImage = blurredImageFromImage(inImage) else {
-            return nil
-        }
-        var allRects = [CGRect] ()
-        let humanRects = try? await humanRectsForImageWithVision (inImage)
-        let faceRects = try? await faceRectsForImageWithVision (inImage)
-
-        if let humanRects = humanRects {
-            allRects.append(contentsOf: humanRects)
-        }
-        if let faceRects = faceRects {
-            allRects.append(contentsOf: faceRects)
-        }
-
-        var result : CIImage?
-
-        autoreleasepool {
-            let maskImage = maskImage(size: CGSize(width: inImage.extent.width, height: inImage.extent.height), maskRects: allRects)
-
-            guard let filter = CIFilter(name: "CIBlendWithRedMask") else {
-                return
-            }
-
-            filter.setValue( inImage, forKey: kCIInputBackgroundImageKey)
-            filter.setValue( blurredImage, forKey: kCIInputImageKey)
-            filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
-
-            result = filter.outputImage
-        }
-
-        return result
-    }
-
     func convertVideo(url: URL) -> Bool {
         let inputAsset = AVAsset(url:url)
         let videoDuration = inputAsset.duration
@@ -258,10 +107,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         //let timePerFrame = 1.0 / videoTrack.nominalFrameRate
         let totalFrames = Int (videoDuration.seconds * Double (videoTrack.nominalFrameRate))
 
-        DispatchQueue.main.sync {
-            self.progressBar.maxValue = Double(totalFrames)
-            self.progressBar.doubleValue = 0
-        }
+        self.progressBar.maxValue = Double(totalFrames)
+        self.progressBar.doubleValue = 0
 
         let secondsPerFrame = videoDuration.seconds / Double (totalFrames)
 
@@ -279,7 +126,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         return true
     }
-
 
     func  computeImageForFrame (frameIndex : Int , totalFrames : Int, generator: AVAssetImageGenerator, secondsPerFrame: Double, pixelBuffer: CVPixelBuffer, context: CIContext, assetWriterAdaptor: AVAssetWriterInputPixelBufferAdaptor, assetWriterInput: AVAssetWriterInput, assetWriter: AVAssetWriter) {
 

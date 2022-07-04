@@ -18,6 +18,7 @@ class FaceBlurrer
 
     func blurrFaces( _ inSourceImage : CIImage, finished: @escaping (CIImage?) -> Void)
     {
+        sourceImage = inSourceImage
         blurredImage = inSourceImage.applyingGaussianBlur(sigma: 50)
 
         humanRectsForImageWithVision (inSourceImage) { [self] (foundHumanRects) in
