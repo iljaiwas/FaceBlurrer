@@ -150,11 +150,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let faceBlurrer = FaceBlurrer()
             faceBlurrer.blurrFaces(frameCIImage!) { modifiedImage in
                 autoreleasepool {
-                    guard let modifiedImage = modifiedImage else {
+                    guard let modifiedCIImage = modifiedImage?.ciImage() else {
                         return
                     }
 
-                    context.render(modifiedImage, to: pixelBuffer)
+                    context.render(modifiedCIImage, to: pixelBuffer)
 
                     if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: imageTimeEstimate) {
                         print ("append failed with error \(assetWriter.error!)")
@@ -163,7 +163,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     var nsImage = NSImage()
                     if frameIndex % 25 == 0 {
-                        nsImage = NSImage.fromCIImage(modifiedImage)
+                        nsImage = modifiedImage ?? NSImage()
                     }
                     DispatchQueue.main.async {
                         if frameIndex % 25 == 0 {

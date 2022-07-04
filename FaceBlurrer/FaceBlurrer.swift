@@ -5,7 +5,7 @@
 //  Created by ilja on 03.07.2022.
 //
 
-import Foundation
+import Cocoa
 import CoreImage
 import Vision
 
@@ -16,7 +16,7 @@ class FaceBlurrer
     var blurredImage = CIImage()
     var sourceImage = CIImage()
 
-    func blurrFaces( _ inSourceImage : CIImage, finished: @escaping (CIImage?) -> Void)
+    func blurrFaces( _ inSourceImage : CIImage, finished: @escaping (NSImage?) -> Void)
     {
         sourceImage = inSourceImage
         blurredImage = inSourceImage.applyingGaussianBlur(sigma: 50)
@@ -31,7 +31,7 @@ class FaceBlurrer
         }
     }
 
-    func checkIfDetectionDone (_ finished: (CIImage?) -> Void) {
+    func checkIfDetectionDone (_ finished: (NSImage?) -> Void) {
         guard let humanRects = humanRects, let faceRects = faceRects else {
             return;
         }
@@ -52,8 +52,11 @@ class FaceBlurrer
             filter.setValue( blurredImage, forKey: kCIInputImageKey)
             filter.setValue( CIImage(cgImage: maskImage!), forKey: kCIInputMaskImageKey)
 
-            let resultImage = filter.outputImage
-            finished (resultImage)
+            if let result = filter.outputImage {
+                finished (NSImage.fromCIImage(result))
+            } else {
+                finished (NSImage())
+            }
         }
     }
 
