@@ -22,7 +22,11 @@ class VideoConverter
     var assetWriterInput : AVAssetWriterInput?
     var assetWriter : AVAssetWriter?
 
+    var frameExtractor : FrameExtractor?
+    var imageBlurrer : FaceBlurrer?
+
     init(withURL inVideoURL: URL) {
+
         videoURL = inVideoURL
 
         inputAsset = AVAsset(url:videoURL)
@@ -66,7 +70,6 @@ class VideoConverter
         let attrs = [kCVPixelBufferCGImageCompatibilityKey: kCFBooleanTrue,
              kCVPixelBufferCGBitmapContextCompatibilityKey: kCFBooleanTrue] as CFDictionary
 
-
         var temp : CVPixelBuffer?
 
         CVPixelBufferCreate(kCFAllocatorDefault,
@@ -81,15 +84,22 @@ class VideoConverter
         totalFrames = Int (videoDuration.seconds * Double (videoTrack.nominalFrameRate))
         secondsPerFrame = videoDuration.seconds / Double (totalFrames)
 
-        let frameExtractor = FrameExtractor(totalFrames: totalFrames, imageGenerator: imageGenerator , secondsPerFrame: secondsPerFrame)
-        let imageBlurrer = FaceBlurrer(frameExtractor: frameExtractor)
+        frameExtractor = FrameExtractor(totalFrames: totalFrames, imageGenerator: imageGenerator , secondsPerFrame: secondsPerFrame)
+        guard let frameExtractor = frameExtractor else { return }
+        imageBlurrer = FaceBlurrer(frameExtractor: frameExtractor)
+        guard let imageBlurrer = imageBlurrer else { return }
 
-        let blurredImages = imageBlurrer.blurredImages()
-        var iterator = blurredImages.makeAsyncIterator()
+        var iterator = imageBlurrer.blurredImages().makeAsyncIterator()
 
         while let blurredImage = await iterator.next() {
-            if let pixelBuffer = self.pixelBuffer, let assetWriterAdaptor = self.assetWriterAdaptor {
-                self.ciContext.render(blurredImage.blurredImage.ciImage()!, to: pixelBuffer)
+            if let pixelBuffer = self.pixelBuffer,
+               let assetWriterAdaptor = self.assetWriterAdaptor,
+               let blurredCIImage = blurredImage.image.ciImage() {
+
+                print ("received blurred image at index \(blurredImage.frameIndex) timestamp: \(blurredImage.timestamp.value)")
+                print ("face blurrer \(String(describing: self.imageBlurrer!))")
+
+                self.ciContext.render(blurredCIImage, to: pixelBuffer)
 
                 if false == assetWriterAdaptor.append(pixelBuffer, withPresentationTime: blurredImage.timestamp) {
                     print ("append failed with error \(String(describing: self.assetWriter?.error!))")
