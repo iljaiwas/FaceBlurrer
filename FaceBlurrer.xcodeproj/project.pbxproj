@@ -12,6 +12,7 @@
 		4D11DF17286DD6B00010510B /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4D11DF15286DD6B00010510B /* MainMenu.xib */; };
 		4D56FC2428722378009C6183 /* FaceBlurrer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D56FC2328722378009C6183 /* FaceBlurrer.swift */; };
 		4D56FC2728737A52009C6183 /* VideoConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D56FC2628737A52009C6183 /* VideoConverter.swift */; };
+		4DA96DC02876197100D57BC8 /* FrameExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DA96DBF2876197100D57BC8 /* FrameExtractor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		4D11DF18286DD6B00010510B /* FaceBlurrer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FaceBlurrer.entitlements; sourceTree = "<group>"; };
 		4D56FC2328722378009C6183 /* FaceBlurrer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceBlurrer.swift; sourceTree = "<group>"; };
 		4D56FC2628737A52009C6183 /* VideoConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoConverter.swift; sourceTree = "<group>"; };
+		4DA96DBF2876197100D57BC8 /* FrameExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameExtractor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +62,7 @@
 				4D11DF15286DD6B00010510B /* MainMenu.xib */,
 				4D11DF18286DD6B00010510B /* FaceBlurrer.entitlements */,
 				4D56FC2328722378009C6183 /* FaceBlurrer.swift */,
+				4DA96DBF2876197100D57BC8 /* FrameExtractor.swift */,
 			);
 			path = FaceBlurrer;
 			sourceTree = "<group>";
@@ -136,6 +139,7 @@
 			files = (
 				4D11DF12286DD6AF0010510B /* AppDelegate.swift in Sources */,
 				4D56FC2728737A52009C6183 /* VideoConverter.swift in Sources */,
+				4DA96DC02876197100D57BC8 /* FrameExtractor.swift in Sources */,
 				4D56FC2428722378009C6183 /* FaceBlurrer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

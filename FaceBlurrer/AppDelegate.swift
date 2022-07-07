@@ -49,7 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             self.videoConverter = VideoConverter(withURL: url)
 
-            self.videoConverter?.convertVideo()
+            Task {
+                await self.videoConverter?.convertVideo ()
+            }
         }
     }
 }
